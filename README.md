@@ -33,8 +33,8 @@ An interactive web application built with Gradio that visualizes auto businesses
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/tennessee-auto-businesses-dashboard.git
-cd tennessee-auto-businesses-dashboard
+git clone https://github.com/LNshuti/tn-autos.git
+cd tn-autos
 ```
 
 ### Create a Virtual Environment (Optional but Recommended)
