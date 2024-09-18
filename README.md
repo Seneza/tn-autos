@@ -1,7 +1,4 @@
-# Tennessee Auto Businesses Dashboard
-
-## [Tennessee Auto Businesses](https://leoncensh-tn.hf.space) 🚛
-
+# [Tennessee Auto Businesses Dashboard](https://leoncensh-tn.hf.space) 🚛
 
 An interactive web application built with Gradio that visualizes auto businesses and population data across Tennessee. This dashboard provides maps, charts, and data tables to explore the distribution of auto-related businesses and demographic information by county.
 
