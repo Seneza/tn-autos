@@ -1,0 +1,7 @@
+gradio
+pandas
+plotly
+folium
+geopandas
+pyarrow
+openrouteservice
