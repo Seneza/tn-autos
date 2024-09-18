@@ -15,9 +15,9 @@ An interactive web application built with Gradio that visualizes auto businesses
 
 ## Table of Contents
 
-- [Features](## Features)
-- [Demo](## Demo)
-- [Installation](## Installation)
+- [Features](#Features)
+- [Demo](#Demo)
+- [Installation](#Installation)
 - [Data Sources](#data-sources)
 - [Usage](#usage)
 - [Configuration](#configuration)
