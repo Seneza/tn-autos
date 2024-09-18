@@ -16,7 +16,7 @@ An interactive web application built with Gradio that visualizes auto businesses
 ## Table of Contents
 
 - [Features](## Features)
-- [Demo](## [Demo](https://leoncensh-tn.hf.space))
+- [Demo](## Demo)
 - [Installation](## Installation)
 - [Data Sources](#data-sources)
 - [Usage](#usage)
