@@ -11,8 +11,6 @@ An interactive web application built with Gradio that visualizes auto businesses
 - **Isochrone Maps**: Generate isochrone maps around AutoZone locations to visualize areas reachable within a specified driving time.
 - **Data Tables**: Explore a curated list of auto repair and parts locations sourced from Yellowbook.
 
-## [Demo](https://www.loom.com/share/b30b8ec1bba54365a15883b75133094d?sid=52075736-936a-42d9-a505-b20d533c39d9)
-
 ## Table of Contents
 
 - [Features](#Features)
