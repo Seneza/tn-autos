@@ -1,4 +1,4 @@
-# Tennessee Auto Businesses Dashboard 🚛
+# Tennessee Auto Businesses Networks 🚛
 
 ![image](https://github.com/user-attachments/assets/fb8019a6-976b-4bdb-89fa-22e91b7ac7df)
 
