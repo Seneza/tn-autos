@@ -112,31 +112,7 @@ To enable isochrone map functionality, you need an API key from OpenRouteService
 
 - **Default Location**: The map centers on Tennessee coordinates `[35.8601, -86.6602]` with a default zoom level of 8. You can adjust these settings in the `create_map` function within `app.py`.
 
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. **Fork the Repository**
-2. **Create a Feature Branch**
-
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-
-3. **Commit Your Changes**
-
-   ```bash
-   git commit -m 'Add YourFeature'
-   ```
-
-4. **Push to the Branch**
-
-   ```bash
-   git push origin feature/YourFeature
-   ```
-5. **Open a Pull Request**
-
-## What we use
+## Stack
 
 - **OpenRouteService** to create 30 minutes isochrone.
 - **Gradio** for the interactive web interface.
