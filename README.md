@@ -122,7 +122,7 @@ To enable isochrone map functionality, you need an API key from OpenRouteService
 
 # Experimentation
 
-## **Page 1: Multi-Armed Bandit Problems**
+## **Multi-Armed Bandit Problems**
 
 1. **What is a Multi-Armed Bandit (MAB)?**
     - A MAB problem involves several options (arms) and a decision-maker that selects which arm to pull over time to maximize some reward.
@@ -150,9 +150,7 @@ np.random.binomial(1, reward_prob[0]), np.random.binomial(1, reward_prob[1])
 
 ---
 
-### **Page 2: Exploration vs. Exploitation in MAB**
-
-**Goal**: Understand the trade-off between exploration and exploitation.
+### **Exploration vs. Exploitation in MAB**
 
 1. **Exploration**:
     - Necessary to gather information about the arms.
@@ -176,9 +174,7 @@ rewards = np.random.binomial(1, [reward_prob[choice] for choice in choices])
 
 ---
 
-### **Page 3: Thompson Sampling for Multi-Armed Bandits**
-
-**Goal**: Introduce Thompson Sampling, a Bayesian approach to solving MAB problems.
+### **Thompson Sampling for Multi-Armed Bandits**
 
 1. **What is Thompson Sampling?**
     - A method that models the reward of each arm as a probability distribution.
@@ -217,9 +213,7 @@ for _ in range(100):
 
 ---
 
-### **Page 4: Contextual Bandits and Real-World Applications**
-
-**Goal**: Introduce contextual bandits, which consider additional information (context) when making decisions.
+### **Contextual Bandits and Real-World Applications**
 
 1. **What are Contextual Bandits?**
     - Unlike traditional MAB, contextual bandits take into account the state or features of the environment.
@@ -247,9 +241,7 @@ model = LogisticRegression().fit(contexts, rewards)
 
 ---
 
-### **Page 5: Evaluating Bandit Algorithms and Real-World Challenges**
-
-**Goal**: Understand how to evaluate MAB algorithms and the challenges in real-world applications.
+### **Evaluating Bandit Algorithms and Real-World Challenges**
 
 1. **Evaluating Multi-Armed Bandit Algorithms**:
     - **Cumulative Regret**: Measure how much reward is lost by not always selecting the optimal arm.
