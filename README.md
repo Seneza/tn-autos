@@ -120,6 +120,167 @@ To enable isochrone map functionality, you need an API key from OpenRouteService
 - **Plotly** for data visualization.
 - **U.S. Census Bureau** for population data.
 
+# Experimentation
+To create a five-page Google Colab tutorial on Multi-Armed Bandit (MAB) Experiments, based on the insights provided by the PDF document, here’s a step-by-step structure that could follow the principles in the tutorial for adaptive experiments and bandits:
+
+---
+
+## **Page 1: Multi-Armed Bandit Problems**
+
+1. **What is a Multi-Armed Bandit (MAB)?**
+    - A MAB problem involves several options (arms) and a decision-maker that selects which arm to pull over time to maximize some reward.
+    - The challenge is to balance *exploration* (learning about different arms) and *exploitation* (choosing the best-known arm).
+
+2. **Use Cases of MAB**
+    - Digital advertising, where you allocate resources to ads.
+    - Clinical trials, where different treatments need to be tested.
+
+3. **Regret Minimization**:
+    - MAB algorithms aim to minimize regret, which is the difference between the cumulative reward and the reward of the optimal strategy.
+
+**Example**:
+A small code block introducing MAB using `numpy` for a simple 2-arm bandit.
+
+```python
+import numpy as np
+
+# Reward probabilities for two arms
+reward_prob = [0.5, 0.7]
+
+# Simulate pulling arms
+np.random.binomial(1, reward_prob[0]), np.random.binomial(1, reward_prob[1])
+```
+
+---
+
+### **Page 2: Exploration vs. Exploitation in MAB**
+
+**Goal**: Understand the trade-off between exploration and exploitation.
+
+1. **Exploration**:
+    - Necessary to gather information about the arms.
+    - Explores new actions, even when suboptimal, to gain knowledge.
+
+2. **Exploitation**:
+    - Uses the knowledge gained so far to maximize immediate rewards.
+    - Exploits the best arm known at that moment.
+
+3. **Balancing Exploration and Exploitation**:
+    - If we only exploit, we risk never learning the best arm. If we only explore, we waste resources.
+
+**Example**: 
+Simulate 100 rounds of a random policy (pure exploration) and a greedy policy (pure exploitation).
+
+```python
+num_rounds = 100
+choices = np.random.choice([0, 1], size=num_rounds)
+rewards = np.random.binomial(1, [reward_prob[choice] for choice in choices])
+```
+
+---
+
+### **Page 3: Thompson Sampling for Multi-Armed Bandits**
+
+**Goal**: Introduce Thompson Sampling, a Bayesian approach to solving MAB problems.
+
+1. **What is Thompson Sampling?**
+    - A method that models the reward of each arm as a probability distribution.
+    - Samples from the distribution to balance exploration and exploitation.
+
+2. **Steps in Thompson Sampling**:
+    - Sample a probability for each arm based on prior observations.
+    - Select the arm with the highest sampled probability.
+    - Update the posterior distribution based on the outcome.
+
+3. **Advantages**:
+    - Thompson sampling balances exploration and exploitation naturally.
+    - It is computationally efficient and works well in practice.
+
+**Example**:
+Implement a basic Thompson Sampling algorithm for a 2-arm bandit.
+
+```python
+from scipy.stats import beta
+
+successes = [0, 0]
+failures = [0, 0]
+
+def thompson_sampling_arm():
+    return np.argmax([beta.rvs(1 + successes[i], 1 + failures[i]) for i in range(2)])
+
+# Simulate pulling arms and updating rewards
+for _ in range(100):
+    chosen_arm = thompson_sampling_arm()
+    reward = np.random.binomial(1, reward_prob[chosen_arm])
+    if reward:
+        successes[chosen_arm] += 1
+    else:
+        failures[chosen_arm] += 1
+```
+
+---
+
+### **Page 4: Contextual Bandits and Real-World Applications**
+
+**Goal**: Introduce contextual bandits, which consider additional information (context) when making decisions.
+
+1. **What are Contextual Bandits?**
+    - Unlike traditional MAB, contextual bandits take into account the state or features of the environment.
+    - The goal is to map contexts to actions to maximize reward.
+
+2. **Use Cases of Contextual Bandits**:
+    - Personalized recommendations (e.g., news, ads).
+    - Adaptive clinical trials where patient features are used to assign treatments.
+
+3. **Implementing a Contextual Bandit**:
+    - Contextual bandits use feature-based models (like logistic regression) to predict rewards.
+
+**Example**:
+Use `sklearn` to implement a basic contextual bandit model using logistic regression.
+
+```python
+from sklearn.linear_model import LogisticRegression
+
+contexts = np.random.randn(100, 2)
+arms = np.random.choice([0, 1], size=100)
+rewards = np.random.binomial(1, arms * 0.7 + contexts[:, 0] * 0.3)
+
+model = LogisticRegression().fit(contexts, rewards)
+```
+
+---
+
+### **Page 5: Evaluating Bandit Algorithms and Real-World Challenges**
+
+**Goal**: Understand how to evaluate MAB algorithms and the challenges in real-world applications.
+
+1. **Evaluating Multi-Armed Bandit Algorithms**:
+    - **Cumulative Regret**: Measure how much reward is lost by not always selecting the optimal arm.
+    - **Conversion Rate**: Percentage of times the optimal arm was selected.
+
+2. **Real-World Challenges**:
+    - **Non-Stationary Rewards**: The reward probabilities may change over time.
+    - **Delayed Feedback**: Rewards might not be observed immediately, complicating learning.
+    - **Multiple Objectives**: In real-world systems, there might be trade-offs between multiple goals.
+
+3. **Simulating MAB with Evaluation Metrics**:
+    - Simulate a simple MAB experiment and plot the cumulative regret over time.
+
+**Example**:
+Simulate and plot cumulative regret for a Thompson Sampling policy.
+
+```python
+import matplotlib.pyplot as plt
+
+cumulative_regret = np.cumsum([reward_prob[1] - reward_prob[thompson_sampling_arm()] for _ in range(100)])
+
+plt.plot(cumulative_regret)
+plt.title('Cumulative Regret')
+plt.xlabel('Rounds')
+plt.ylabel('Regret')
+plt.show()
+```
+
 # Contact
 
 For any questions or suggestions, please open an issue or contact [nshutl0@sewanee.edu](mailto:nshutl0@sewanee.edu).
