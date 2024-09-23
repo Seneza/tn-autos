@@ -121,9 +121,6 @@ To enable isochrone map functionality, you need an API key from OpenRouteService
 - **U.S. Census Bureau** for population data.
 
 # Experimentation
-To create a five-page Google Colab tutorial on Multi-Armed Bandit (MAB) Experiments, based on the insights provided by the PDF document, here’s a step-by-step structure that could follow the principles in the tutorial for adaptive experiments and bandits:
-
----
 
 ## **Page 1: Multi-Armed Bandit Problems**
 
