@@ -272,7 +272,7 @@ plt.show()
 
 # Contact
 
-For any questions or suggestions, please open an issue or contact [nshutl0@sewanee.edu](mailto:nshutl0@sewanee.edu).
+Please open an issue or contact [nshutl0@sewanee.edu](mailto:nshutl0@sewanee.edu).
 
 ## License
 
