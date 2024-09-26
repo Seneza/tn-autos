@@ -4,11 +4,6 @@ description: 'Welcome to the home of your new documentation'
 ---
 
 <img
-  className="block dark:hidden"
-  src="/images/hero-light.svg"
-  alt="Hero Light"
-/>
-<img
   className="hidden dark:block"
   src="/images/hero-dark.svg"
   alt="Hero Dark"
@@ -69,3 +64,22 @@ Update your docs to your brand and add valuable content for the best user conver
     Check out our showcase of our favorite documentation
   </Card>
 </CardGroup>
+
+---
+
+## Application Overview
+
+Welcome to the documentation for the **Tennessee Auto Repair Businesses Dashboard**. This dashboard provides visualizations and insights into population data, geographical regions, and the locations of various auto repair businesses across the state of Tennessee.
+
+The application includes:
+
+1. **Interactive maps** of Tennessee displaying different geographical layers (Counties, Zip Codes, HSAs, and HRRs).
+2. **Population statistics** for the top counties in Tennessee based on the 2010 and 2020 census.
+3. **Business locations** mapped by type, such as AutoZone, Napa Auto Parts, O'Reilly Auto Parts, etc.
+
+### API Key Setup
+
+To run this application, ensure that you have the **OpenRouteService (ORS) API key** set as an environment variable:
+
+```bash
+export ors=<YOUR_API_KEY>
