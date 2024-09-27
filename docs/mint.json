@@ -38,11 +38,6 @@
       "url": "https://mintlify.com/docs"
     },
     {
-      "name": "Community",
-      "icon": "slack",
-      "url": "https://mintlify.com/community"
-    },
-    {
       "name": "Blog",
       "icon": "newspaper",
       "url": "https://mintlify.com/blog"
@@ -85,7 +80,7 @@
   ],
   "footerSocials": {
     "x": "https://x.com/mintlify",
-    "github": "https://github.com/mintlify",
+    "github": "https://github.com/LNshuti",
     "linkedin": "https://www.linkedin.com/company/mintsearch"
   }
 }
