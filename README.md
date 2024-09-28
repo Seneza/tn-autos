@@ -17,7 +17,6 @@ Discover the power of data visualization with our Gradio web application that an
 
 - **`location-of-auto-businesses.csv`**: information about auto businesses, including types and geographic coordinates.
 - **`cbg_geographic_data.csv`**: Population and land data segmented by census block groups (CBG).
-- **`tn_weekly_mobility_2019.parquet`**: Mobility patterns across Tennessee for the year 2019.
 - **`county-shape-file.shp`**: Shapefile containing the geographic boundaries of Tennessee counties.
 
 ## 🛠️ Requirements
