@@ -1,7 +1,9 @@
 # Kora Customer Map Analysis
 
 # [Demo](https://leoncensh-tn.hf.space/) 
-Welcome to **Kora Customer Map Analysis**! 🚀
+Welcome to **Kora Auto Repair Shops Geospatial Analysis**! 🚀
+
+![image](https://github.com/user-attachments/assets/7a79278b-d852-4ff3-8315-a20d374dbe71)
 
 Discover the power of data visualization with our Gradio web application that analyzes the distribution of auto repair and parts businesses across Tennessee. Dive deep into population trends and explore interactive maps that bring your data to life. We create isochrones (drive-time polygons) for business locations using the OpenRouteService (ORS) API. 
 
