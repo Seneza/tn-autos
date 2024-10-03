@@ -83,19 +83,19 @@ pip install gradio pandas plotly folium numpy geopandas branca openrouteservice
 |  `other-assets`                | Other public assets                                       |
 | `src/`                            | Source folder for the application                         |
 |  `components/`                 | UI component folder                                       |
-| │    `ui/`                     | Contains reusable UI components                           |
-| │   │    `button.tsx`          | Button component                                          |
-| │   │    `card.tsx`            | Card component                                            |
-| │   │    `checkbox.tsx`        | Checkbox component                                        |
-| │   │    `scroll-area.tsx`     | Scroll area component                                     |
-| │   │    `tabs.tsx`            | Tabs components                                           |
+|  `ui/`                     | Contains reusable UI components                           |
+|  `button.tsx`          | Button component                                          |
+|   `card.tsx`            | Card component                                            |
+|    `checkbox.tsx`        | Checkbox component                                        |
+|    `scroll-area.tsx`     | Scroll area component                                     |
+|    `tabs.tsx`            | Tabs components                                           |
 |  `pages/`                      | Next.js routing folder                                    |
-| │    `api/`                    | Next.js API Routes (optional)                             |
-| │    `_app.tsx`                | App initialization (for global CSS, etc.)                 |
-| │    `index.tsx`               | Home page or main entry point                             |
+|     `api/`                    | Next.js API Routes (optional)                             |
+|    `_app.tsx`                | App initialization (for global CSS, etc.)                 |
+|    `index.tsx`               | Home page or main entry point                             |
 |  `styles/`                     | Global and Tailwind CSS styles                            |
-| │    `globals.css`             | Global styles (includes Tailwind imports)                 |
-| │    `tailwind.css`            | TailwindCSS base styles (if necessary)                    |
+|   `globals.css`             | Global styles (includes Tailwind imports)                 |
+|    `tailwind.css`            | TailwindCSS base styles (if necessary)                    |
 |  `utils/`                      | Utility functions (if needed)                             |
 | `.gitignore`                      | Git ignore rules                                          |
 | `next.config.js`                  | Next.js configuration                                     |
