@@ -70,6 +70,40 @@ pip install gradio pandas plotly folium numpy geopandas branca openrouteservice
 - **Tennessee Businesses by County Tab**:
   - **Geospatial Insights**: businesses categorized by county with dynamic markers and county boundaries.
 
+## Production
+
+TennesseeAutoDashboard/
+├── .vercel/                     
+│   ├── project.json
+│   └── README.txt
+├── public/                       # Public assets (favicon, images, etc.)
+│   ├── favicon.ico
+│   └── other-assets
+├── src/                          # Source folder for the application
+│   ├── components/               # UI component folder
+│   │   ├── ui/
+│   │   │   ├── button.tsx        # Button component
+│   │   │   ├── card.tsx          # Card component
+│   │   │   ├── checkbox.tsx      # Checkbox component
+│   │   │   ├── scroll-area.tsx   # Scroll area component
+│   │   │   ├── tabs.tsx          # Tabs components
+│   ├── pages/                    # Next.js routing folder
+│   │   ├── api/                  # Next.js API Routes (optional)
+│   │   ├── _app.tsx              # App initialization (for global CSS, etc.)
+│   │   ├── index.tsx             # Home page or main entry point
+│   ├── styles/
+│   │   ├── globals.css           # Global styles (includes Tailwind imports)
+│   │   ├── tailwind.css          # TailwindCSS base styles (if necessary)
+│   ├── utils/                    # Utility functions (if needed)
+├── .gitignore                    # Git ignore rules
+├── next.config.js                # Next.js config
+├── package.json                  # Node dependencies and scripts
+├── postcss.config.js             # PostCSS config for Tailwind CSS
+├── tailwind.config.js            # Tailwind CSS configuration
+├── tsconfig.json                 # TypeScript config
+├── README.md                     # Project documentation
+└── vercel.json                   # Vercel configuration file 
+
 ## 📜 License
 
 This project is licensed under the **MIT License**. 
