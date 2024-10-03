@@ -72,37 +72,40 @@ pip install gradio pandas plotly folium numpy geopandas branca openrouteservice
 
 ## Production
 
-TennesseeAutoDashboard/
-├── .vercel/                     
-│   ├── project.json
-│   └── README.txt
-├── public/                       # Public assets (favicon, images, etc.)
-│   ├── favicon.ico
-│   └── other-assets
-├── src/                          # Source folder for the application
-│   ├── components/               # UI component folder
-│   │   ├── ui/
-│   │   │   ├── button.tsx        # Button component
-│   │   │   ├── card.tsx          # Card component
-│   │   │   ├── checkbox.tsx      # Checkbox component
-│   │   │   ├── scroll-area.tsx   # Scroll area component
-│   │   │   ├── tabs.tsx          # Tabs components
-│   ├── pages/                    # Next.js routing folder
-│   │   ├── api/                  # Next.js API Routes (optional)
-│   │   ├── _app.tsx              # App initialization (for global CSS, etc.)
-│   │   ├── index.tsx             # Home page or main entry point
-│   ├── styles/
-│   │   ├── globals.css           # Global styles (includes Tailwind imports)
-│   │   ├── tailwind.css          # TailwindCSS base styles (if necessary)
-│   ├── utils/                    # Utility functions (if needed)
-├── .gitignore                    # Git ignore rules
-├── next.config.js                # Next.js config
-├── package.json                  # Node dependencies and scripts
-├── postcss.config.js             # PostCSS config for Tailwind CSS
-├── tailwind.config.js            # Tailwind CSS configuration
-├── tsconfig.json                 # TypeScript config
-├── README.md                     # Project documentation
-└── vercel.json                   # Vercel configuration file 
+| **Directory/File**                | **Description**                                           |
+|-----------------------------------|-----------------------------------------------------------|
+| `TennesseeAutoDashboard/`         | Root folder of the project                                |
+| `.vercel/`                        | Vercel-specific config directory (generated after setup)  |
+| ├── `project.json`                | Vercel project configuration                             |
+| └── `README.txt`                  | Vercel-generated README                                  |
+| `public/`                         | Public assets (favicon, images, etc.)                     |
+| ├── `favicon.ico`                 | Favicon file                                              |
+| └── `other-assets`                | Other public assets                                       |
+| `src/`                            | Source folder for the application                         |
+| ├── `components/`                 | UI component folder                                       |
+| │   ├── `ui/`                     | Contains reusable UI components                           |
+| │   │   ├── `button.tsx`          | Button component                                          |
+| │   │   ├── `card.tsx`            | Card component                                            |
+| │   │   ├── `checkbox.tsx`        | Checkbox component                                        |
+| │   │   ├── `scroll-area.tsx`     | Scroll area component                                     |
+| │   │   ├── `tabs.tsx`            | Tabs components                                           |
+| ├── `pages/`                      | Next.js routing folder                                    |
+| │   ├── `api/`                    | Next.js API Routes (optional)                             |
+| │   ├── `_app.tsx`                | App initialization (for global CSS, etc.)                 |
+| │   └── `index.tsx`               | Home page or main entry point                             |
+| ├── `styles/`                     | Global and Tailwind CSS styles                            |
+| │   ├── `globals.css`             | Global styles (includes Tailwind imports)                 |
+| │   └── `tailwind.css`            | TailwindCSS base styles (if necessary)                    |
+| ├── `utils/`                      | Utility functions (if needed)                             |
+| `.gitignore`                      | Git ignore rules                                          |
+| `next.config.js`                  | Next.js configuration                                     |
+| `package.json`                    | Node dependencies and scripts                             |
+| `postcss.config.js`               | PostCSS configuration for Tailwind CSS                    |
+| `tailwind.config.js`              | Tailwind CSS configuration                                |
+| `tsconfig.json`                   | TypeScript configuration                                  |
+| `README.md`                       | Project documentation                                     |
+| `vercel.json`                     | Vercel configuration file (optional)                      |
+
 
 ## 📜 License
 
