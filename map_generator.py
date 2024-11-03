@@ -1,24 +1,35 @@
 # Responsible for generating the map
 
 import folium
+import logging
 from folium.plugins import MarkerCluster
 import pandas as pd
 
+
 class MapGenerator:
-    def __init__(self, geo_data, logger):
+    def __init__(self, geo_data, logger=None):
         self.geo_data = geo_data
-        self.logger = logger
+        self.logger = logging.getLogger(__name__)
 
-    def create_map(self, geo_layer="Counties", business_filters=["All"], business_df=None):
+    def create_map(self, business_filters, business_df, geo_layer='Counties'):
         self.logger.info(f"Creating map with geo_layer: {geo_layer} and business_filters: {business_filters}")
-        m = folium.Map(location=[35.8601, -86.6602], zoom_start=7)
+        
+        # Debugging statement to check geo_data contents
+        self.logger.debug(f"geo_data keys: {self.geo_data.keys()}")
+        
+        if geo_layer not in self.geo_data:
+            self.logger.error(f"Geo layer '{geo_layer}' not found in geo_data")
+            raise KeyError(f"Geo layer '{geo_layer}' not found in geo_data")
+        
+        m = folium.Map(location=[35.5175, -86.5804], zoom_start=7)
         folium.GeoJson(self.geo_data[geo_layer], name=geo_layer).add_to(m)
-
-        marker_cluster = MarkerCluster().add_to(m)
-        filtered_df = business_df[business_df['business_type'].isin(business_filters)] if "All" not in business_filters else business_df
-        for _, row in filtered_df.iterrows():
-            folium.Marker(location=[row['md_y'], row['md_x']], popup=f"<b>{row['name']}</b>").add_to(marker_cluster)
-
-        folium.LayerControl().add_to(m)
-        self.logger.info("Map creation completed.")
+        
+        # Add business markers to the map
+        for _, row in business_df.iterrows():
+            if row['business_name'] in business_filters:
+                folium.Marker(
+                    location=[row['latitude'], row['longitude']],
+                    popup=row['business_name']
+                ).add_to(m)    
         return m._repr_html_()
+    
