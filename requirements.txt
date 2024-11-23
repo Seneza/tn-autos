@@ -5,3 +5,8 @@ folium
 geopandas
 pyarrow
 openrouteservice
+flake8
+pytest
+hnswlib
+numpy
+branca

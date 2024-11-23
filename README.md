@@ -1,11 +1,11 @@
 # Geospatial Analysis of Tennessee Auto Repair Shops
 
-# [Demo](https://leoncensh-tn.hf.space/) 
+# [Demo](https://leoncensh-tn.hf.space/)
 Welcome to **TN Auto Repair Shops Geospatial Analysis**! 🚀
 
 ![image](https://github.com/user-attachments/assets/7a79278b-d852-4ff3-8315-a20d374dbe71)
 
-This is a Gradio web application that analyzes the distribution of auto repair and parts businesses across Tennessee. We create isochrones (drive-time polygons) for business locations using the OpenRouteService (ORS) API. 
+This is a Gradio web application that analyzes the distribution of auto repair and parts businesses across Tennessee. We create isochrones (drive-time polygons) for business locations using the OpenRouteService (ORS) API.
 
 ## 🌟 Features
 
@@ -109,8 +109,8 @@ pip install gradio pandas plotly folium numpy geopandas branca openrouteservice
 
 ## 📜 License
 
-This project is licensed under the **MIT License**. 
+This project is licensed under the **MIT License**.
 
 ## 🙏 Acknowledgements
 
-Thank you to the creators and maintainers of **Gradio**, **Folium**, **Plotly**, and **OpenRouteService**. 
+Thank you to the creators and maintainers of **Gradio**, **Folium**, **Plotly**, and **OpenRouteService**.
