@@ -1,529 +1,699 @@
+"""Interactive map of transportation businesses in Tennessee."""
+# app.py
+
 import logging
+import math
+import os
+from typing import List, Tuple
+
+import folium
+import geopandas as gpd
 import gradio as gr
+import hnswlib
+import numpy as np
 import pandas as pd
 import plotly.express as px
-import folium
-import numpy as np
-import geopandas as gpd
-from branca.element import Element
-import os
-import openrouteservice
 from folium.plugins import MarkerCluster
-
-import matplotlib.pyplot as plt
-import io
-import base64
-import logfire
 
 # Logger setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-logfire.configure()  # Configure logfire for logging
 
-# ORS (OpenRouteService) client setup
-ORS_API_KEY = os.getenv('ors')  # Retrieve ORS API key from environment variables
-if not ORS_API_KEY:
-    raise ValueError("OpenRouteService API key not found. Please set the 'ors' environment variable.")
-
-client = openrouteservice.Client(key=ORS_API_KEY)  # Initialize ORS client
-
-# Function to create isochrones around AutoZone locations
-def create_isochrone_map():
+def load_csv(filepath: str) -> pd.DataFrame:
     """
-    Creates a Folium map with isochrones (travel time areas) around AutoZone locations.
+    Load a CSV file into a Pandas DataFrame.
+
+    Parameters:
+        filepath (str): The path to the CSV file.
 
     Returns:
-        HTML representation of the map.
+        pd.DataFrame: A DataFrame containing the loaded data.
+
+    Raises:
+        FileNotFoundError: If the specified file does not exist.
     """
-    m = folium.Map(location=[35.8601, -86.6602], zoom_start=7)  # Center map on Tennessee
-    autozone_df = df_md_final1[df_md_final1['business_type'] == 'Autozone']  # Filter for AutoZone locations
+    try:
+        return pd.read_csv(filepath)
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {filepath}")
+        raise e
 
-    for idx, row in autozone_df.iterrows():
-        coords = (row['md_x'], row['md_y'])  # Get coordinates of the location
-        try:
-            # Request isochrone data from ORS API
-            isochrone = client.isochrones(locations=[coords], profile='driving-car', range=[1800])
-            # Add isochrone layer to the map
-            folium.GeoJson(isochrone, name='Isochrones').add_to(m)
-        except openrouteservice.exceptions.HTTPError as e:
-            print(f"HTTPError: {e}")
-            continue
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            continue
 
-    folium.LayerControl().add_to(m)  # Add layer control to the map
-    return m._repr_html_()  # Return the map as HTML
+def load_shapefile(filepath: str, state_fp: str) -> gpd.GeoDataFrame:
+    """
+    Load a shapefile and filter it by the provided state FIPS code.
 
-# Data for 2020 Tennessee population by county
-population_2020_data = {
-    'County': [
-        'Shelby', 'Davidson', 'Knox', 'Hamilton', 'Rutherford', 
-        'Williamson', 'Montgomery', 'Sumner', 'Blount', 'Washington', 
-        'Madison', 'Sevier', 'Maury', 'Wilson', 'Bradley'
-    ],
-    'Population_2020': [
-        929744, 715884, 478971, 366207, 341486, 
-        247726, 220069, 196281, 135280, 133001, 
-        98823, 98380, 100974, 147737, 108620
+    Parameters:
+        filepath (str): The path to the shapefile.
+        state_fp (str): The FIPS code of the state to filter by.
+
+    Returns:
+        gpd.GeoDataFrame: A GeoDataFrame containing the filtered geographic data.
+
+    Raises:
+        FileNotFoundError: If the shapefile does not exist.
+        KeyError: If the state FIPS column is not found in the shapefile.
+    """
+    try:
+        geo_data = gpd.read_file(filepath)
+        if "statefp" in geo_data.columns:
+            geo_data = geo_data[geo_data["statefp"] == state_fp]
+        elif "STATEFP" in geo_data.columns:
+            geo_data = geo_data[geo_data["STATEFP"] == state_fp]
+        else:
+            raise KeyError("State FIPS column not found in shapefile.")
+        return geo_data
+    except FileNotFoundError as e:
+        logger.error(f"Shapefile not found: {filepath}")
+        raise e
+    except KeyError as e:
+        logger.error(str(e))
+        raise e
+
+
+def define_business_types(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Categorize businesses based on their names into predefined business types.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing business information with a 'name' column.
+
+    Returns:
+        pd.DataFrame: The original DataFrame with an additional 'business_type' column.
+    """
+    conditions = [
+        df["name"].str.contains("Autozone", case=False, na=False),
+        df["name"].str.contains("Napa Auto Parts", case=False, na=False),
+        df["name"].str.contains("Firestone Complete Auto Care", case=False, na=False),
+        df["name"].str.contains("O'Reilly Auto Parts", case=False, na=False),
+        df["name"].str.contains("Advance Auto Parts", case=False, na=False),
+        df["name"].str.contains(
+            "Toyota|Honda|Kia|Nissan|Chevy|Ford|Carmax|GMC", case=False, na=False
+        ),
     ]
-}
+    choices = [
+        "Autozone",
+        "Napa Auto",
+        "Firestone",
+        "O'Reilly Auto",
+        "Advance Auto",
+        "Car Dealership",
+    ]
+    df["business_type"] = np.select(
+        conditions, choices, default="Other Auto Repair Shops"
+    )
+    return df
 
-# Create a DataFrame for the top 15 counties
-df_population_2020 = pd.DataFrame(population_2020_data)
 
-# Function to create a Folium map with selected geographical boundaries and markers
-def create_map(geo_layer="Counties", business_filters=["All"]):
+def merge_population_data(df_geo: pd.DataFrame, population_2020: dict) -> pd.DataFrame:
     """
-    Creates an interactive map with selected geographical boundaries and business markers.
+    Merge population data from 2010 and 2020 based on county names.
 
-    Args:
-        geo_layer (str): Geographical layer to display ('Counties', 'Zip Codes', 'HSAs', 'HRRs').
-        business_filters (list): List of business types to include.
+    Parameters:
+        df_geo (pd.DataFrame): GeoDataFrame containing geographic information with 'cntyname' and 'pop10' columns.
+        population_2020 (dict): Dictionary containing 2020 population data with 'County' and 'Population_2020' keys.
 
     Returns:
-        HTML representation of the map.
+        pd.DataFrame: A merged DataFrame comparing populations from 2010 and 2020.
     """
-    logger.info(f"Creating map with geo_layer: {geo_layer} and business_filters: {business_filters}")
+    df_population_2020 = pd.DataFrame(population_2020)
+    df_population_2010 = (
+        df_geo.groupby("cntyname")["pop10"]
+        .sum()
+        .reset_index()
+        .rename(columns={"cntyname": "County", "pop10": "Population_2010"})
+        .sort_values(by="Population_2010", ascending=False)
+    )
+    df_population_comparison = pd.merge(
+        df_population_2010, df_population_2020, on="County"
+    )
+    return df_population_comparison
 
-    m = folium.Map(location=[35.8601, -86.6602], zoom_start=7)  # Initialize map centered on Tennessee
+
+def prepare_hnswlib_index(df: pd.DataFrame) -> hnswlib.Index:
+    """
+    Initialize and prepare an hnswlib index for efficient nearest neighbor searches.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing business locations with 'md_y' and 'md_x' columns.
+
+    Returns:
+        hnswlib.Index: An initialized hnswlib index populated with business coordinates.
+    """
+    coordinates = df[["md_y", "md_x"]].to_numpy().astype("float32")
+    num_elements = coordinates.shape[0]
+
+    index = hnswlib.Index(space="l2", dim=2)
+    index.init_index(max_elements=num_elements, ef_construction=200, M=16)
+    index.add_items(coordinates, ids=df.index.values)
+    index.set_ef(50)
+    return index
+
+
+def find_nearest_shops(
+    df: pd.DataFrame, index: hnswlib.Index, shop_name: str, k: int = 5
+) -> Tuple[pd.DataFrame, np.ndarray]:
+    """
+    Identify the nearest auto shops to a selected shop using hnswlib.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing business information.
+        index (hnswlib.Index): An hnswlib index for nearest neighbor search.
+        shop_name (str): The name of the shop to find neighbors for.
+        k (int, optional): Number of nearest neighbors to retrieve. Defaults to 5.
+
+    Returns:
+        Tuple[pd.DataFrame, np.ndarray]: A tuple containing a DataFrame of neighboring shops and their distances.
+
+    Raises:
+        ValueError: If the specified shop is not found in the dataset.
+    """
+    selected_shops = df[df["name"] == shop_name]
+    if selected_shops.empty:
+        logger.error(f"Shop '{shop_name}' not found in the dataset.")
+        raise ValueError(f"Shop '{shop_name}' not found.")
+
+    selected_shop = selected_shops.iloc[0]
+    selected_coords = np.array(
+        [selected_shop["md_y"], selected_shop["md_x"]], dtype="float32"
+    ).reshape(1, -1)
+
+    labels, distances = index.knn_query(selected_coords, k=k + 1)
+    neighbor_indices = labels[0]
+    neighbor_distances = distances[0]
+
+    if neighbor_indices[0] == selected_shop.name:
+        neighbor_indices = neighbor_indices[1:]
+        neighbor_distances = neighbor_distances[1:]
+    else:
+        neighbor_indices = neighbor_indices[neighbor_indices != selected_shop.name]
+        neighbor_distances = neighbor_distances[1:]
+
+    neighbor_shops = df.loc[neighbor_indices]
+    return neighbor_shops, neighbor_distances
+
+
+def create_map(
+    geo_layer: str,
+    business_filters: List[str],
+    counties_geo: gpd.GeoDataFrame,
+    hsa_geo: gpd.GeoDataFrame,
+    hrr_geo: gpd.GeoDataFrame,
+    df: pd.DataFrame,
+) -> str:
+    """
+    Generate an interactive Folium map with specified geographic layers and business filters.
+
+    Parameters:
+        geo_layer (str): The geographic layer to display ('Counties', 'HSAs', 'HRRs').
+        business_filters (List[str]): List of business types to filter on.
+        counties_geo (gpd.GeoDataFrame): GeoDataFrame for counties.
+        hsa_geo (gpd.GeoDataFrame): GeoDataFrame for HSAs.
+        hrr_geo (gpd.GeoDataFrame): GeoDataFrame for HRRs.
+        df (pd.DataFrame): DataFrame containing business information.
+
+    Returns:
+        str: HTML representation of the generated Folium map.
+    """
+    logger.info(
+        f"Creating map with geo_layer: {geo_layer} and business_filters: {business_filters}"
+    )
+    m = folium.Map(location=[35.8601, -86.6602], zoom_start=7)
+
+    geo_data_map = {"Counties": counties_geo, "HSAs": hsa_geo, "HRRs": hrr_geo}
 
     try:
-        # Select the appropriate GeoDataFrame based on geo_layer
-        if geo_layer == "Counties":
-            geo_data = counties_geo
-        elif geo_layer == "Zip Codes":
-            geo_data = zcta_geo
-        elif geo_layer == "HSAs":
-            geo_data = hsa_geo
-        elif geo_layer == "HRRs":
-            geo_data = hrr_geo
-        else:
-            geo_data = counties_geo  # Default to counties
-        logger.info(f"Geo layer {geo_layer} selected.")
-
-        # Add geographical boundaries to the map
+        geo_data = geo_data_map.get(geo_layer, counties_geo)
         folium.GeoJson(geo_data, name=geo_layer).add_to(m)
+        logger.info(f"Geo layer {geo_layer} added to the map.")
     except Exception as e:
         logger.error(f"Error loading GeoData for {geo_layer}: {e}")
 
-    # Initialize Marker Cluster for better visualization of markers
     marker_cluster = MarkerCluster().add_to(m)
 
-    # Filter businesses based on selected types
     if "All" not in business_filters:
-        filtered_df = df_md_final1[df_md_final1['business_type'].isin(business_filters)]
+        filtered_df = df[df["business_type"].isin(business_filters)]
     else:
-        filtered_df = df_md_final1.copy()
+        filtered_df = df.copy()
 
-    logger.info(f"Filtered {len(filtered_df)} businesses based on filters: {business_filters}")
+    logger.info(
+        f"Filtered {len(filtered_df)} businesses based on filters: {business_filters}"
+    )
 
-    # Add markers for each business location
     for _, row in filtered_df.iterrows():
         folium.Marker(
-            location=[row['md_y'], row['md_x']],
-            popup=f"<b>{row['name']}</b>"
+            location=[row["md_y"], row["md_x"]],
+            popup=(
+                f"<b>{row['name']}</b><br>"
+                f"{row.get('address', 'N/A')}, {row.get('city', 'N/A')}, TN {row.get('postal_code', 'N/A')}"
+            ),
+            icon=folium.Icon(color="blue", icon="info-sign"),
         ).add_to(marker_cluster)
 
-    folium.LayerControl().add_to(m)  # Add layer control to toggle layers
+    folium.LayerControl().add_to(m)
     logger.info("Map creation completed.")
-    return m._repr_html_()  # Return the map as HTML
+    return m._repr_html_()
 
-# Function to create a bar plot for 2020 Tennessee population (top 15 counties)
-def plot_2020_population_top15():
+
+def plot_population_comparison(df: pd.DataFrame) -> px.bar:
     """
-    Creates a bar chart of the 2020 population for the top 15 Tennessee counties.
+    Create a side-by-side bar chart comparing 2010 and 2020 population data.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing 'County', 'Population_2010', and 'Population_2020' columns.
 
     Returns:
-        Plotly Figure object.
+        px.bar: A Plotly Express bar chart object.
     """
-    fig = px.bar(
-        df_population_2020, 
-        x='County', 
-        y='Population_2020', 
-        title='Tennessee Population 2020', 
-        labels={'County': 'County', 'Population_2020': ''},
-        color='Population_2020',
-        color_continuous_scale='Blues'
+    df_melted = df.melt(
+        id_vars="County",
+        value_vars=["Population_2010", "Population_2020"],
+        var_name="Year",
+        value_name="Population",
     )
-    fig.update_layout(xaxis={'categoryorder':'total descending'}, template='plotly_white')
+    fig = px.bar(
+        df_melted,
+        x="County",
+        y="Population",
+        color="Year",
+        barmode="group",
+        title="Tennessee Population Comparison: 2010 vs 2020",
+        labels={"County": "County", "Population": "Population"},
+        color_discrete_map={"Population_2010": "purple", "Population_2020": "blue"},
+    )
+    fig.update_layout(
+        xaxis={"categoryorder": "total descending"}, template="plotly_white"
+    )
     return fig
 
-# Function to create the population distribution plot for 2010
-def plot_population_distribution():
+
+def create_app() -> gr.Blocks:
     """
-    Creates a bar chart of the 2010 population by county.
+    Construct and configure the Gradio application interface.
+
+    This function loads necessary datasets, prepares data for visualization,
+    and sets up various interactive tabs within the Gradio dashboard.
 
     Returns:
-        Plotly Figure object.
+        gr.Blocks: The configured Gradio Blocks interface.
     """
-    print(cbg_geographic_data.head())  # Debugging statement
-    # Group by county and sum the population
-    county_data = (
-        cbg_geographic_data
-        .groupby('cntyname')['pop10']
-        .sum()
-        .reset_index()
-        .sort_values(by='pop10', ascending=False)
+    # Load datasets
+    df_businesses = load_csv("data/location-of-auto-businesses.csv")
+    cbg_geographic_data = load_csv("data/cbg_geographic_data.csv")
+
+    # Define business types
+    df_businesses = define_business_types(df_businesses)
+
+    # Merge population data
+    population_2020 = {
+        "County": [
+            "Shelby",
+            "Davidson",
+            "Knox",
+            "Hamilton",
+            "Rutherford",
+            "Williamson",
+            "Montgomery",
+            "Sumner",
+            "Blount",
+            "Washington",
+            "Madison",
+            "Sevier",
+            "Maury",
+            "Wilson",
+            "Bradley",
+        ],
+        "Population_2020": [
+            929744,
+            715884,
+            478971,
+            366207,
+            341486,
+            247726,
+            220069,
+            196281,
+            135280,
+            133001,
+            98823,
+            98380,
+            100974,
+            147737,
+            108620,
+        ],
+    }
+    df_population_comparison = merge_population_data(
+        cbg_geographic_data, population_2020
     )
 
-    fig = px.bar(
-        county_data.head(15), 
-        x="cntyname", 
-        y="pop10", 
-        title="2010 Population by County", 
-        labels={"cntyname": "County", "pop10": "2010 Population"},
-        color='pop10',
-        color_continuous_scale='Viridis'
-    )
-    fig.update_layout(xaxis={'categoryorder':'total descending'}, template='plotly_white')
-    return fig
+    # Load shapefiles
+    counties_geo = load_shapefile("data/county/01_county-shape-file.shp", "47")
+    hsa_geo = load_shapefile("data/hsa/01_hsa-shape-file.shp", "47")
+    hrr_geo = load_shapefile("data/hrr/01_hrr-shape-file.shp", "47")
 
-# Load datasets
-df_md_final1 = pd.read_csv("data/location-of-auto-businesses.csv")
-print(df_md_final1.columns)  # Debugging statement
-print(df_md_final1.info())   # Debugging statement
+    # Prepare hnswlib index
+    index = prepare_hnswlib_index(df_businesses)
 
-cbg_geographic_data = pd.read_csv("data/cbg_geographic_data.csv")
-print(cbg_geographic_data.columns)  # Debugging statement
-print(cbg_geographic_data.info())   # Debugging statement
+    # Gradio Interface
+    with gr.Blocks(theme=gr.themes.Default()) as app:
+        gr.Markdown("# 🚗 Tennessee Auto Repair Businesses Dashboard")
 
-# Create DataFrame for 2010 population
-df_population_2010 = (
-    cbg_geographic_data
-    .groupby('cntyname')['pop10']
-    .sum()
-    .reset_index()
-    .sort_values(by='pop10', ascending=False)
-)
-df_population_2010.rename(columns={'cntyname': 'County', 'pop10': 'Population_2010'}, inplace=True)
+        with gr.Tab("Overview"):
+            gr.Markdown("## 📊 Tennessee Population Statistics")
 
-# Merge 2010 and 2020 population data for comparison
-df_population_comparison = pd.merge(df_population_2010, df_population_2020, on='County')
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### 2010 vs 2020 Population Comparison")
+                    gr.Plot(plot_population_comparison(df_population_comparison))
 
-# Function to create a side-by-side bar chart for 2010 vs 2020 population
-def plot_population_comparison():
-    """
-    Creates a bar chart comparing 2010 and 2020 population data by county.
+            gr.Markdown("### 🛠️ Auto Businesses in Tennessee")
 
-    Returns:
-        Plotly Figure object.
-    """
-    # Melt DataFrame to have 'Year' and 'Population' columns
-    df_melted = df_population_comparison.melt(
-        id_vars='County', 
-        value_vars=['Population_2010', 'Population_2020'],
-        var_name='Year', 
-        value_name='Population'
-    )
-    print(df_melted)  # Debugging statement
-    fig = px.bar(
-        df_melted, 
-        x='County', 
-        y='Population', 
-        color='Year', 
-        barmode='group', 
-        title="Tennessee Population Comparison: 2010 vs 2020", 
-        labels={'County': 'County', 'Population': 'Population'},
-        color_discrete_map={'Population_2010': 'purple', 'Population_2020': 'blue'}
-    )
-    fig.update_layout(xaxis={'categoryorder': 'total descending'}, template='plotly_white')
-    return fig
+            gr.Dataframe(
+                headers=[
+                    "Location Name",
+                    "Street Address",
+                    "City",
+                    "State",
+                    "Postal Code",
+                ],
+                datatype=["str", "str", "str", "str", "str"],
+                value=[
+                    [
+                        "AutoZone Auto Parts - Nashville #2080",
+                        "100 Donelson Pike",
+                        "Nashville",
+                        "Tennessee",
+                        "37214",
+                    ],
+                    [
+                        "AutoZone Auto Parts - Nashville #3597",
+                        "1007 Murfreesboro Pike",
+                        "Nashville",
+                        "Tennessee",
+                        "37217",
+                    ],
+                    # ... (remaining rows omitted for brevity)
+                ],
+                row_count=52,  # Updated for the total number of rows
+                interactive=False,
+            )
 
-# Load the County shapefile
-county_shapefile_path = "data/county/01_county-shape-file.shp"
-if not os.path.exists(county_shapefile_path):
-    raise FileNotFoundError(f"County shapefile not found at {county_shapefile_path}. Please ensure the file exists.")
-
-counties_geo = gpd.read_file(county_shapefile_path)
-print("County Shapefile Info:", counties_geo.info())  # Debugging statement
-print("County Shapefile Head:", counties_geo.head())  # Debugging statement
-
-# Filter for Tennessee counties using state FIPS code '47'
-counties_geo = counties_geo[counties_geo['statefp'] == '47']
-
-# Define FIPS codes and abbreviations for TN and KY
-state_fips = ['47', '21']  # TN and KY FIPS codes
-state_abbr = ['TN', 'KY']
-
-# Load the HSA shapefile
-hsa_shapefile_path = "data/hsa/01_hsa-shape-file.shp"
-if not os.path.exists(hsa_shapefile_path):
-    raise FileNotFoundError(f"HSA shapefile not found at {hsa_shapefile_path}. Please ensure the file exists.")
-
-hsa_geo = gpd.read_file(hsa_shapefile_path)
-# Filter HSAs for specified states
-if 'hsastate' in hsa_geo.columns:
-    hsa_geo = hsa_geo[hsa_geo['hsastate'].isin(state_abbr)]
-elif 'STATEFP' in hsa_geo.columns:
-    hsa_geo = hsa_geo[hsa_geo['STATEFP'].isin(state_fips)]
-else:
-    raise KeyError("Column to filter state in HSA shapefile not found.")
-
-# Load the HRR shapefile
-hrr_shapefile_path = "data/hrr/01_hrr-shape-file.shp"
-if not os.path.exists(hrr_shapefile_path):
-    raise FileNotFoundError(f"HRR shapefile not found at {hrr_shapefile_path}. Please ensure the file exists.")
-
-hrr_geo = gpd.read_file(hrr_shapefile_path)
-# Filter HRRs for specified states
-if 'hrrstate' in hrr_geo.columns:
-    hrr_geo = hrr_geo[hrr_geo['hrrstate'].isin(state_abbr)]
-elif 'STATEFP' in hrr_geo.columns:
-    hrr_geo = hrr_geo[hrr_geo['STATEFP'].isin(state_fips)]
-else:
-    raise KeyError("Column to filter state in HRR shapefile not found.")
-
-# Define business types based on business names
-df_md_final1['business_type'] = np.where(
-    df_md_final1['name'].str.contains("Autozone", case=False, na=False), "Autozone", 
-    np.where(
-        df_md_final1['name'].str.contains("Napa Auto Parts", case=False, na=False), "Napa Auto", 
-        np.where(
-            df_md_final1['name'].str.contains("Firestone Complete Auto Care", case=False, na=False), "Firestone",                                 
-            np.where(
-                df_md_final1['name'].str.contains("O'Reilly Auto Parts", case=False, na=False), "O'Reilly Auto",
-                np.where(
-                    df_md_final1['name'].str.contains("Advance Auto Parts", case=False, na=False), "Advance Auto",
-                    np.where(
-                        df_md_final1['name'].str.contains("Toyota|Honda|Kia|Nissan|Chevy|Ford|Carmax|GMC", case=False, na=False), 
-                        "Car Dealership", 
-                        "Other Auto Repair Shops"
-                    )
+            gr.Markdown("### 📍 Interactive Map")
+            gr.HTML(
+                create_map(
+                    geo_layer="Counties",
+                    business_filters=["All"],
+                    counties_geo=counties_geo,
+                    hsa_geo=hsa_geo,
+                    hrr_geo=hrr_geo,
+                    df=df_businesses,
                 )
             )
-        )
-    )
-)
 
-# Prepare data for modeling
-def prepare_model_data():
+        with gr.Tab("📍 Shops in TN Counties"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### Filter Shops by Business Type")
+                    business_options = ["All"] + sorted(
+                        df_businesses["business_type"].unique()
+                    )
+                    business_filter = gr.CheckboxGroup(
+                        label="Select Business Types",
+                        choices=business_options,
+                        value=["All"],
+                    )
+                    reset_button = gr.Button("Reset Filters")
+                with gr.Column(scale=4):
+                    shops_counties_map = gr.HTML()
+
+            def update_counties_map(business_filters):
+                """
+                Update the counties map based on selected business type filters.
+
+                Parameters:
+                    business_filters (List[str]): List of selected business types.
+
+                Returns:
+                    str: HTML representation of the updated Folium map.
+                """
+                if "All" in business_filters or not business_filters:
+                    business_filters = ["All"]
+                return create_map(
+                    geo_layer="Counties",
+                    business_filters=business_filters,
+                    counties_geo=counties_geo,
+                    hsa_geo=hsa_geo,
+                    hrr_geo=hrr_geo,
+                    df=df_businesses,
+                )
+
+            business_filter.change(
+                fn=update_counties_map,
+                inputs=[business_filter],
+                outputs=[shops_counties_map],
+            )
+            reset_button.click(
+                fn=lambda: (
+                    "All",
+                    create_map(
+                        geo_layer="Counties",
+                        business_filters=["All"],
+                        counties_geo=counties_geo,
+                        hsa_geo=hsa_geo,
+                        hrr_geo=hrr_geo,
+                        df=df_businesses,
+                    ),
+                )[:1],
+                outputs=[business_filter, shops_counties_map],
+            )
+
+        with gr.Tab("📍 Shops in TN HSAs"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### Filter Shops by Business Type")
+                    business_options_hsa = ["All"] + sorted(
+                        df_businesses["business_type"].unique()
+                    )
+                    business_filter_hsa = gr.CheckboxGroup(
+                        label="Select Business Types",
+                        choices=business_options_hsa,
+                        value=["All"],
+                    )
+                    reset_button_hsa = gr.Button("Reset Filters")
+                with gr.Column(scale=4):
+                    shops_hsa_map = gr.HTML()
+
+            def update_hsa_map(business_filters):
+                """
+                Update the HSAs map based on selected business type filters.
+
+                Parameters:
+                    business_filters (List[str]): List of selected business types.
+
+                Returns:
+                    str: HTML representation of the updated Folium map.
+                """
+                if "All" in business_filters or not business_filters:
+                    business_filters = ["All"]
+                return create_map(
+                    geo_layer="HSAs",
+                    business_filters=business_filters,
+                    counties_geo=counties_geo,
+                    hsa_geo=hsa_geo,
+                    hrr_geo=hrr_geo,
+                    df=df_businesses,
+                )
+
+            business_filter_hsa.change(
+                fn=update_hsa_map, inputs=[business_filter_hsa], outputs=[shops_hsa_map]
+            )
+            reset_button_hsa.click(
+                fn=lambda: (
+                    "All",
+                    create_map(
+                        geo_layer="HSAs",
+                        business_filters=["All"],
+                        counties_geo=counties_geo,
+                        hsa_geo=hsa_geo,
+                        hrr_geo=hrr_geo,
+                        df=df_businesses,
+                    ),
+                )[:1],
+                outputs=[business_filter_hsa, shops_hsa_map],
+            )
+
+        with gr.Tab("📍 Shops in TN HRRs"):
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### Filter Shops by Business Type")
+                    business_options_hrr = ["All"] + sorted(
+                        df_businesses["business_type"].unique()
+                    )
+                    business_filter_hrr = gr.CheckboxGroup(
+                        label="Select Business Types",
+                        choices=business_options_hrr,
+                        value=["All"],
+                    )
+                    reset_button_hrr = gr.Button("Reset Filters")
+                with gr.Column(scale=4):
+                    shops_hrr_map = gr.HTML()
+
+            def update_hrr_map(business_filters):
+                """
+                Update the HRRs map based on selected business type filters.
+
+                Parameters:
+                    business_filters (List[str]): List of selected business types.
+
+                Returns:
+                    str: HTML representation of the updated Folium map.
+                """
+                if "All" in business_filters or not business_filters:
+                    business_filters = ["All"]
+                return create_map(
+                    geo_layer="HRRs",
+                    business_filters=business_filters,
+                    counties_geo=counties_geo,
+                    hsa_geo=hsa_geo,
+                    hrr_geo=hrr_geo,
+                    df=df_businesses,
+                )
+
+            business_filter_hrr.change(
+                fn=update_hrr_map, inputs=[business_filter_hrr], outputs=[shops_hrr_map]
+            )
+            reset_button_hrr.click(
+                fn=lambda: (
+                    "All",
+                    create_map(
+                        geo_layer="HRRs",
+                        business_filters=["All"],
+                        counties_geo=counties_geo,
+                        hsa_geo=hsa_geo,
+                        hrr_geo=hrr_geo,
+                        df=df_businesses,
+                    ),
+                )[:1],
+                outputs=[business_filter_hrr, shops_hrr_map],
+            )
+
+        with gr.Tab("🔍 Nearest Shop Finder"):
+            gr.Markdown("## Find Nearby Auto Shops in Tennessee")
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### Select a Repair Shop")
+                    shop_names = sorted(df_businesses["name"].unique().tolist())
+                    shop_dropdown = gr.Dropdown(
+                        label="Select Repair Shop", choices=shop_names
+                    )
+                with gr.Column(scale=4):
+                    nearest_map = gr.HTML()
+
+            def update_nearest_shops_map(selected_shop_name):
+                """
+                Update the Nearest Shop Finder map based on the selected repair shop.
+
+                Parameters:
+                    selected_shop_name (str): The name of the selected repair shop.
+
+                Returns:
+                    str: HTML representation of the updated Folium map showing nearest shops.
+
+                Notes:
+                    If no shop is selected, prompts the user to select one.
+                    If the selected shop is not found, returns an error message.
+                """
+                if not selected_shop_name:
+                    return "Please select a repair shop to find nearby auto shops."
+
+                try:
+                    neighbor_shops, neighbor_distances = find_nearest_shops(
+                        df_businesses, index, selected_shop_name
+                    )
+                except ValueError as e:
+                    return str(e)
+
+                selected_shop = df_businesses[
+                    df_businesses["name"] == selected_shop_name
+                ].iloc[0]
+
+                m = folium.Map(
+                    location=[selected_shop["md_y"], selected_shop["md_x"]],
+                    zoom_start=12,
+                )
+
+                # Add selected shop marker
+                folium.Marker(
+                    location=[selected_shop["md_y"], selected_shop["md_x"]],
+                    popup=(
+                        f"<b>Selected Shop:</b> {selected_shop['name']}<br>"
+                        f"{selected_shop.get('address', 'N/A')}, {selected_shop.get('city', 'N/A')}, TN {selected_shop.get('postal_code', 'N/A')}"
+                    ),
+                    icon=folium.Icon(color="red", icon="star"),
+                ).add_to(m)
+
+                # Add markers for neighbor shops
+                for idx, row in neighbor_shops.iterrows():
+                    folium.Marker(
+                        location=[row["md_y"], row["md_x"]],
+                        popup=(
+                            f"<b>Nearest Shop:</b> {row['name']}<br>"
+                            f"{row.get('address', 'N/A')}, {row.get('city', 'N/A')}, TN {row.get('postal_code', 'N/A')}"
+                        ),
+                        icon=folium.Icon(color="blue", icon="info-sign"),
+                    ).add_to(m)
+
+                    # Draw a line between selected shop and neighbor shop
+                    folium.PolyLine(
+                        locations=[
+                            [selected_shop["md_y"], selected_shop["md_x"]],
+                            [row["md_y"], row["md_x"]],
+                        ],
+                        color="blue",
+                    ).add_to(m)
+
+                return m._repr_html_()
+
+            shop_dropdown.change(
+                fn=update_nearest_shops_map,
+                inputs=[shop_dropdown],
+                outputs=[nearest_map],
+            )
+
+        with gr.Tab("🔍 Help"):
+            gr.Markdown(
+                """
+            ## How to Use This Dashboard
+
+            - **Overview Tab:** Provides population statistics and a summary map of all auto businesses in Tennessee.
+
+            - **Shops in TN Counties/HSAs/HRRs Tabs:**
+                - **Filter by Business Type:** Use the checkboxes to select one or multiple business types to display on the map.
+                - **Filter by Geographical Area:** Depending on the tab, you can filter businesses based on Counties, HSAs, or HRRs.
+                - **Reset Filters:** Click the reset button to clear all selected filters and view all businesses.
+                - **Interactive Map:** Zoom in/out, click on markers to view business details.
+
+            - **Nearest Shop Finder Tab:**
+                - **Select a Repair Shop:** Choose a shop from the dropdown menu to find nearby auto shops.
+                - **View Results:** The map will display the selected shop and nearby auto shops with lines connecting them.
+
+            """
+            )
+
+        gr.Markdown("### 📄 Source: Yellow Pages")
+
+    return app
+
+
+def main():
     """
-    Prepares data for machine learning by aggregating business counts and merging with population data.
+    Launch the Gradio application.
 
-    Returns:
-        DataFrame ready for modeling.
+    This function initializes the Gradio app and starts the server, making the dashboard accessible.
     """
-    # Aggregate number of businesses per county
-    business_counts = df_md_final1.groupby('county').size().reset_index(name='business_count')
+    app = create_app()
+    app.launch(server_name="0.0.0.0", server_port=7860, share=True)
 
-    # Merge with population data
-    df_model = pd.merge(df_population_2020, business_counts, left_on='County', right_on='county', how='left')
-    df_model['business_count'] = df_model['business_count'].fillna(0)
 
-    # Drop redundant columns
-    df_model = df_model.drop(columns=['county'])  # Assuming 'county' is the same as 'County'
-
-    # Additional feature engineering can be done here
-
-    return df_model
-
-# Train Random Forest model
-def train_random_forest():
-    """
-    Trains a Random Forest Regressor to predict the number of businesses based on population.
-
-    Returns:
-        Dictionary containing model, test data, predictions, metrics, SHAP values, and feature importances.
-    """
-    from sklearn.model_selection import train_test_split
-    from sklearn.ensemble import RandomForestRegressor
-    from sklearn.metrics import mean_squared_error, r2_score
-    import shap
-
-    df_model = prepare_model_data()
-
-    # Features and target variable
-    X = df_model[['Population_2020']]
-    y = df_model['business_count']
-
-    # Split data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Initialize and train the Random Forest model
-    rf = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf.fit(X_train, y_train)
-
-    # Make predictions on the test set
-    y_pred = rf.predict(X_test)
-
-    # Calculate evaluation metrics
-    mse = mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-
-    # SHAP explanation for model interpretability
-    explainer = shap.Explainer(rf, X_train)
-    shap_values = explainer(X_test)
-
-    # Feature importance
-    feature_importances = pd.DataFrame({
-        'feature': X.columns,
-        'importance': rf.feature_importances_
-    }).sort_values(by='importance', ascending=False)
-
-    return {
-        'model': rf,
-        'X_test': X_test,
-        'y_test': y_test,
-        'y_pred': y_pred,
-        'mse': mse,
-        'r2': r2,
-        'shap_values': shap_values,
-        'feature_importances': feature_importances
-    }
-
-# Function to generate SHAP summary plot as a base64 string
-def get_shap_summary_plot(shap_values, X):
-    """
-    Generates a SHAP summary plot and returns it as a base64 string.
-
-    Args:
-        shap_values: SHAP values from the model.
-        X: Feature data.
-
-    Returns:
-        Base64 encoded image string.
-    """
-    plt.figure()
-    shap.summary_plot(shap_values, X, show=False)
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches='tight')
-    plt.close()
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    return f"data:image/png;base64,{img_base64}"
-
-# Function to generate feature importance plot as a base64 string
-def get_feature_importance_plot(feature_importances):
-    """
-    Generates a feature importance bar chart and returns it as a base64 string.
-
-    Args:
-        feature_importances (DataFrame): DataFrame with features and their importances.
-
-    Returns:
-        Base64 encoded image string.
-    """
-    fig = px.bar(
-        feature_importances, 
-        x='feature', 
-        y='importance', 
-        title='Feature Importance from Random Forest',
-        labels={'feature': 'Feature', 'importance': 'Importance'},
-        color='importance',
-        color_continuous_scale='Blues'
-    )
-    fig.update_layout(template='plotly_white')
-    img_bytes = fig.to_image(format="png")
-    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-    return f"data:image/png;base64,{img_base64}"
-
-# Gradio Interface
-with gr.Blocks(theme=gr.themes.Default()) as app:
-    gr.Markdown("# 🚗 Tennessee Auto Repair Businesses Dashboard")
-
-    with gr.Tab("Overview"):
-        gr.Markdown("## 📊 Tennessee Population Statistics")
-
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("### 2020 Population by County")
-                pop_dist = gr.Plot(plot_2020_population_top15)
-
-        gr.Markdown("### 🛠️ Auto Businesses in Tennessee")
-        manual_table = gr.Dataframe(
-            headers=["Location Name", "Street Address", "City", "State", "Postal Code"],
-            datatype=["str", "str", "str", "str", "str"],
-            value=[
-                ["AutoZone", "257 Wears Valley Rd", "Pigeon Forge", "Tennessee", "37863"],
-                ["Sterling Auto", "2064 Wilma Rudolph Blvd", "Clarksville", "Tennessee", "37040"],
-                # Additional data entries...
-            ],
-            row_count=27,  # Adjusted total number of rows
-            interactive=False
-        )
-
-        gr.Markdown("### 📍 Interactive Map")
-        map_output_overview = gr.HTML(lambda: create_map(geo_layer="Counties", business_filters=["All"]))
-
-    with gr.Tab("📍 Shops in TN Counties"):
-        with gr.Row():
-            with gr.Column(scale=1):
-                gr.Markdown("### Filter Shops by Business Type")
-                business_options = ["All"] + sorted(df_md_final1['business_type'].unique())
-                business_filter = gr.CheckboxGroup(label="Select Business", choices=business_options, value=["All"])
-                reset_button = gr.Button("Reset Filters")
-            with gr.Column(scale=4):
-                shops_counties_map = gr.HTML()
-
-        def update_counties_map(business_filters):
-            if "All" in business_filters or not business_filters:
-                business_filters = ["All"]
-            return create_map(geo_layer="Counties", business_filters=business_filters)
-
-        business_filter.change(fn=update_counties_map, inputs=[business_filter], outputs=[shops_counties_map])
-        reset_button.click(
-            fn=lambda: (["All"], create_map(geo_layer="Counties", business_filters=["All"])),
-            inputs=None, outputs=[business_filter, shops_counties_map]
-        )
-
-    with gr.Tab("📍 Shops in TN HSAs"):
-        with gr.Row():
-            with gr.Column(scale=1):
-                gr.Markdown("### Filter Shops by Business Type")
-                business_options_hsa = ["All"] + sorted(df_md_final1['business_type'].unique())
-                business_filter_hsa = gr.CheckboxGroup(label="Select Business", choices=business_options_hsa, value=["All"])
-                reset_button_hsa = gr.Button("Reset Filters")
-            with gr.Column(scale=4):
-                shops_hsa_map = gr.HTML()
-
-        def update_hsa_map(business_filters):
-            if "All" in business_filters or not business_filters:
-                business_filters = ["All"]
-            return create_map(geo_layer="HSAs", business_filters=business_filters)
-
-        business_filter_hsa.change(fn=update_hsa_map, inputs=[business_filter_hsa], outputs=[shops_hsa_map])
-        reset_button_hsa.click(
-            fn=lambda: (["All"], create_map(geo_layer="HSAs", business_filters=["All"])),
-            inputs=None, outputs=[business_filter_hsa, shops_hsa_map]
-        )
-
-    with gr.Tab("📍 Shops in TN HRRs"):
-        with gr.Row():
-            with gr.Column(scale=1):
-                gr.Markdown("### Filter Shops by Business Type")
-                business_options_hrr = ["All"] + sorted(df_md_final1['business_type'].unique())
-                business_filter_hrr = gr.CheckboxGroup(label="Select Business", choices=business_options_hrr, value=["All"])
-                reset_button_hrr = gr.Button("Reset Filters")
-            with gr.Column(scale=4):
-                shops_hrr_map = gr.HTML()
-
-        def update_hrr_map(business_filters):
-            if "All" in business_filters or not business_filters:
-                business_filters = ["All"]
-            return create_map(geo_layer="HRRs", business_filters=business_filters)
-
-        business_filter_hrr.change(fn=update_hrr_map, inputs=[business_filter_hrr], outputs=[shops_hrr_map])
-        reset_button_hrr.click(
-            fn=lambda: (["All"], create_map(geo_layer="HRRs", business_filters=["All"])),
-            inputs=None, outputs=[business_filter_hrr, shops_hrr_map]
-        )
-
-    with gr.Tab("🔍 Help"):
-        gr.Markdown("""
-        ## How to Use This Dashboard
-
-        - **Overview Tab:** Provides population statistics and a summary map of all auto businesses in Tennessee.
-
-        - **Shops in TN Counties/HSAs/HRRs Tabs:**
-            - **Filter by Business Type:** Use the checkboxes to select one or multiple business types to display on the map.
-            - **Reset Filters:** Click the reset button to clear all selected filters and view all businesses.
-            - **Interactive Map:** Zoom in/out, click on markers to view business details.
-
-        """)
-
-    gr.Markdown("### 📄 Source: Yellowbook")  # Data source acknowledgment
-
-# Launch the Gradio app
-app.launch(server_name="0.0.0.0", server_port=7860, share=True)
+if __name__ == "__main__":
+    main()
